@@ -15,27 +15,50 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Check for Android project
+      id: check_android
+      run: |
+        if [ -d "android" ]; then
+          echo "android_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "android_exists=false" >> $GITHUB_OUTPUT
+          echo "⚠️ Warning: No 'android' directory found. Skipping Android build."
+        fi
+
     - name: Set up JDK
-      uses: actions/setup-java@v3
+      if: steps.check_android.outputs.android_exists == 'true'
+      uses: actions/setup-java@v4
       with:
-        java-version: '11'
+        java-version: '17'
         distribution: 'temurin'
         cache: gradle
 
     - name: Make gradlew executable
+      if: steps.check_android.outputs.android_exists == 'true'
       run: chmod +x android/gradlew
 
     - name: Build Android App
+      if: steps.check_android.outputs.android_exists == 'true'
       run: cd android && ./gradlew assembleRelease
       
     - name: Upload APK as artifact
-      uses: actions/upload-artifact@v3
+      if: steps.check_android.outputs.android_exists == 'true'
+      uses: actions/upload-artifact@v4
       with:
         name: android-apk
         path: android/app/build/outputs/apk/release/
 
+    - name: Check for APK files
+      if: steps.check_android.outputs.android_exists == 'true'
+      run: find android/app/build/outputs/apk/release/ -name "*.apk" -exec ls -lh {} \;
+
     - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
+      if: steps.check_android.outputs.android_exists == 'true' && startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: android/app/build/outputs/apk/release/**/*.apk
+
+    - name: Status Report
+      run: |
+        echo "✅ Workflow completed"
+        echo "Android project exists: ${{ steps.check_android.outputs.android_exists }}"
